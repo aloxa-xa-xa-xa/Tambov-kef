@@ -217,7 +217,7 @@ class MainActivity : Activity() {
     private fun numberField(hintText: String, example: String) = EditText(this).apply {
         hint = example
         textSize = 19f
-        singleLine = true
+        setSingleLine(true)
         inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         setTextColor(white)
         setHintTextColor(Color.rgb(104, 117, 137))
