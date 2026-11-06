@@ -230,7 +230,7 @@ class MainActivity : Activity() {
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = true
             webViewClient = android.webkit.WebViewClient()
-            loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=41.38%2C52.68%2C41.53%2C52.77&layer=mapnik&marker=52.7213%2C41.4523")
+            loadDataWithBaseURL("https://tambov-kaef.local/", demandMapHtml(), "text/html", "UTF-8", null)
         }
         mapCard.addView(map, LinearLayout.LayoutParams(-1, dp(250)))
         val gpsButton = Button(this).apply {
@@ -243,7 +243,7 @@ class MainActivity : Activity() {
         }
         mapCard.addView(gpsButton, margin(top = 10))
         mapCard.addView(TextView(this).apply {
-            text = "Карта города. Слой спроса появится после подключения обмена наблюдениями между водителями."
+            text = "Числа на карте — демонстрационная оценка спроса, не реальные коэффициенты Яндекс Про. Реальные значения появятся после подключения источника данных."
             textSize = 11f
             setTextColor(muted)
             setPadding(dp(4), dp(9), dp(4), dp(2))
@@ -262,7 +262,7 @@ class MainActivity : Activity() {
         page.addView(historyBox)
 
         page.addView(TextView(this).apply {
-            text = "Карта использует OpenStreetMap. Слой спроса появится после подключения обмена наблюдениями."
+            text = "Оценочные значения на карте показаны для демонстрации. Они не являются данными Яндекс Про."
             textSize = 11f
             setTextColor(muted)
             setPadding(0, dp(24), 0, dp(4))
@@ -403,6 +403,38 @@ class MainActivity : Activity() {
             }
         }
     }
+    private fun demandMapHtml(): String = """
+        <!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+        <style>html,body,#map{height:100%;width:100%;margin:0;background:#17202e}
+        .kaef{background:#101722;border:2px solid #f4c542;border-radius:12px;color:#ffd34d;
+        font:bold 14px Arial;text-align:center;padding:5px 7px;box-shadow:0 2px 8px #0009;white-space:nowrap}
+        .leaflet-control-attribution{font-size:9px}</style></head><body><div id="map"></div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+        const map=L.map('map').setView([52.7213,41.4523],12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+        const zones=[
+          {p:[52.721,41.452],v:'1,2×',c:'#62c995',r:850},
+          {p:[52.735,41.430],v:'1,5×',c:'#e7c64b',r:720},
+          {p:[52.707,41.477],v:'1,8×',c:'#ed9847',r:780},
+          {p:[52.746,41.468],v:'2,0×',c:'#e45d59',r:650},
+          {p:[52.694,41.440],v:'1,3×',c:'#e7c64b',r:600}
+        ];
+        zones.forEach(z=>{
+          L.circle(z.p,{radius:z.r,color:z.c,weight:2,fillColor:z.c,fillOpacity:.22}).addTo(map);
+          L.marker(z.p,{icon:L.divIcon({className:'',html:'<div class="kaef">'+z.v+'</div>',iconSize:[62,30],iconAnchor:[31,15]})})
+            .bindPopup('Оценка спроса: <b>'+z.v+'</b><br>Демонстрационное значение').addTo(map);
+        });
+        let driverMarker=null;
+        window.setDriverLocation=(lat,lon)=>{
+          if(driverMarker) map.removeLayer(driverMarker);
+          driverMarker=L.marker([lat,lon]).addTo(map).bindPopup('Ваше местоположение').openPopup();
+          map.setView([lat,lon],14);
+        };
+        </script></body></html>
+    """.trimIndent()
+
     private fun locateMe(map: android.webkit.WebView) {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -420,9 +452,7 @@ class MainActivity : Activity() {
             }
             val lat = location.latitude
             val lon = location.longitude
-            val delta = 0.025
-            val bbox = "${lon-delta},${lat-delta},${lon+delta},${lat+delta}"
-            map.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=${android.net.Uri.encode(bbox)}&layer=mapnik&marker=$lat%2C$lon")
+            map.evaluateJavascript("if(window.setDriverLocation){window.setDriverLocation($lat,$lon);}", null)
             Toast.makeText(this, "Нашёл твоё положение", Toast.LENGTH_SHORT).show()
         } catch (_: SecurityException) {
             Toast.makeText(this, "Нет разрешения на геолокацию", Toast.LENGTH_SHORT).show()
