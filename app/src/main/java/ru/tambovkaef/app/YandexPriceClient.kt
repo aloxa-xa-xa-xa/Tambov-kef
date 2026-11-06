@@ -32,7 +32,6 @@ class YandexPriceClient(
 
         val query = listOf(
             "clid=" + enc(clid),
-            "apikey=" + enc(apiKey),
             "rll=" + enc(String.format(Locale.US, "%.6f,%.6f", longitude, latitude)),
             "class=" + enc("econom,business")
         ).joinToString("&")
@@ -43,6 +42,7 @@ class YandexPriceClient(
             connection.connectTimeout = connectTimeoutMillis
             connection.readTimeout = readTimeoutMillis
             connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("YaTaxi-Api-Key", apiKey)
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
