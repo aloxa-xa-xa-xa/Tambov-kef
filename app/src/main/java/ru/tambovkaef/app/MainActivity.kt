@@ -51,226 +51,63 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Create the installation-specific encryption key automatically on first launch.
-        try { CredentialVault.initialize() } catch (_: Exception) { /* API vault is optional; monitoring remains available. */ }
-        window.statusBarColor = bg
-        window.navigationBarColor = bg
+        try { CredentialVault.initialize() } catch (_: Exception) {}
+        window.statusBarColor = Color.rgb(16, 22, 31)
+        window.navigationBarColor = Color.rgb(16, 22, 31)
         window.decorView.systemUiVisibility = 0
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
-            // Android 15 may draw app content behind system bars.
-            setOnApplyWindowInsetsListener { view, insets ->
-                view.setPadding(0, insets.systemWindowInsetTop, 0, insets.systemWindowInsetBottom)
-                insets
-            }
-        }
-        val scroll = ScrollView(this)
-        val page = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(18), dp(20), dp(28))
-        }
-        scroll.addView(page)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        page.addView(TextView(this).apply {
-            text = "ТАМБОВ  •  ДЛЯ ВОДИТЕЛЕЙ"
-            textSize = 11f
-            letterSpacing = .13f
-            setTextColor(green)
-            typeface = Typeface.DEFAULT_BOLD
-        })
-        page.addView(TextView(this).apply {
-            text = "Тамбов Кэф"
-            textSize = 31f
-            setTextColor(white)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            setPadding(0, dp(7), 0, dp(3))
-        })
-        page.addView(TextView(this).apply {
-            text = "Автоматический мониторинг спроса в разработке"
-            textSize = 14f
-            setTextColor(muted)
-        })
-
-        val statusCard = card()
-        statusCard.orientation = LinearLayout.VERTICAL
-        statusCard.setPadding(dp(16), dp(15), dp(16), dp(15))
-        statusCard.addView(TextView(this).apply {
-            text = "ТЕКУЩИЙ СТАТУС"
-            textSize = 10f
-            letterSpacing = .12f
-            setTextColor(muted)
-            typeface = Typeface.DEFAULT_BOLD
-        })
-        statusCard.addView(TextView(this).apply {
-            text = "Автоматизация в разработке"
-            textSize = 19f
-            setTextColor(white)
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(5), 0, dp(3))
-        })
-        statusCard.addView(TextView(this).apply {
-            text = "Ручной ввод отключён. Мониторинг читает экран только после разрешения Android; точность распознавания ещё проверяется."
-            textSize = 12f
-            setTextColor(muted)
-        })
-        val monitorButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        monitorButtons.addView(Button(this).apply {
-            text = "Запустить мониторинг"
-            isAllCaps = false
-            setOnClickListener { requestScreenCapture() }
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        monitorButtons.addView(Button(this).apply {
-            text = "Остановить"
-            isAllCaps = false
-            setOnClickListener { stopService(Intent(this@MainActivity, ScreenCaptureService::class.java)) }
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        statusCard.addView(monitorButtons, margin(top = 12))
-        page.addView(statusCard, margin(top = 22))
-
-        val debugCard = card().apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(15), dp(13), dp(15), dp(13))
-        }
-        debugCard.addView(TextView(this).apply {
-            text = "ЧТО РАСПОЗНАЛ МОНИТОРИНГ"
-            textSize = 10f
-            letterSpacing = .1f
-            setTextColor(muted)
-            typeface = Typeface.DEFAULT_BOLD
-        })
-        ocrDebug = TextView(this).apply {
-            text = "Пока нет данных. Запусти мониторинг и открой экран коэффициентов в Яндекс Про."
-            textSize = 12f
-            setTextColor(white)
-            setPadding(0, dp(8), 0, dp(8))
-        }
-        debugCard.addView(ocrDebug)
-        debugCard.addView(Button(this).apply {
-            text = "Обновить распознанный текст"
-            isAllCaps = false
-            setOnClickListener { renderOcrDebug(); renderHistory() }
-        })
-        page.addView(debugCard, margin(top = 12))
-
-        page.addView(sectionTitle("Дополнительный источник цен (необязательно)"), margin(top = 22))
-        val apiCard = card().apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(15), dp(14), dp(15), dp(14))
-        }
-        apiCard.addView(TextView(this).apply {
-            text = "Мониторинг экрана и история работают без ключей. Эти поля нужны только для отдельного запроса ориентировочных цен через API Яндекса."
-            textSize = 12f
-            setTextColor(muted)
-        })
-        clidInput = EditText(this).apply {
-            hint = "clid"
-            setSingleLine(true)
-            setTextColor(white)
-            setHintTextColor(muted)
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-            setBackground(rounded(bg, 10))
-        }
-        apiCard.addView(clidInput, margin(top = 10))
-        apiKeyInput = EditText(this).apply {
-            hint = "API-ключ"
-            setSingleLine(true)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setTextColor(white)
-            setHintTextColor(muted)
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-            setBackground(rounded(bg, 10))
-        }
-        apiCard.addView(apiKeyInput, margin(top = 8))
-        apiCard.addView(Button(this).apply {
-            text = "Сохранить ключи"
-            isAllCaps = false
-            setOnClickListener {
-                try {
-                    CredentialVault.save(this@MainActivity, clidInput.text.toString().trim(), apiKeyInput.text.toString().trim())
-                    apiKeyInput.text.clear()
-                    apiStatus.text = "Доступ сохранён на этом устройстве."
-                    Toast.makeText(this@MainActivity, "Ключи сохранены", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    apiStatus.text = "Не удалось сохранить доступ: ${e.message ?: "ошибка"}"
-                }
-            }
-        }, margin(top = 8))
-        apiCard.addView(Button(this).apply {
-            text = "Проверить цены по GPS"
-            isAllCaps = false
-            setOnClickListener { fetchYandexPrices() }
-        }, margin(top = 6))
-        apiStatus = TextView(this).apply {
-            text = "Без ключей можно пользоваться мониторингом экрана Яндекс Про. API можно подключить позже."
-            textSize = 12f
-            setTextColor(muted)
-            setPadding(0, dp(9), 0, 0)
-        }
-        apiCard.addView(apiStatus)
-        page.addView(apiCard, margin(top = 8))
-        try {
-            val saved = CredentialVault.load(this)
-            clidInput.setText(saved?.first.orEmpty())
-            if (saved != null) apiStatus.text = "Ключи уже сохранены. Для повторной проверки нажми кнопку ниже."
-        } catch (_: Exception) {
-            apiStatus.text = "Не удалось прочитать сохранённый доступ. Введи ключи заново."
-        }
-
-        page.addView(sectionTitle("Карта Тамбова"), margin(top = 20))
-        val mapCard = card().apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-        }
+        // После заставки водитель сразу попадает на карту — без панели меню и настроек.
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(16, 22, 31)) }
         val map = android.webkit.WebView(this).apply {
-            setBackgroundColor(panel)
+            setBackgroundColor(Color.rgb(16, 22, 31))
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = true
             webViewClient = android.webkit.WebViewClient()
             loadDataWithBaseURL("https://tambov-kaef.local/", demandMapHtml(), "text/html", "UTF-8", null)
         }
-        mapCard.addView(map, LinearLayout.LayoutParams(-1, dp(250)))
-        val gpsButton = Button(this).apply {
-            text = "◎  Где я нахожусь"
-            textSize = 14f
+        root.addView(map, FrameLayout.LayoutParams(-1, -1))
+
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        fun mapControl(label: String, action: () -> Unit): Button = Button(this).apply {
+            text = label
+            textSize = 23f
             isAllCaps = false
-            setTextColor(Color.rgb(8, 26, 22))
-            background = rounded(green, 14)
+            setTextColor(Color.rgb(24, 31, 42))
+            background = rounded(Color.WHITE, 16)
+            setPadding(0, 0, 0, 0)
+            setOnClickListener { action() }
+        }
+        controls.addView(mapControl("+") {
+            map.evaluateJavascript("window.zoomMap && window.zoomMap(1)", null)
+        }, LinearLayout.LayoutParams(dp(52), dp(52)))
+        controls.addView(mapControl("−") {
+            map.evaluateJavascript("window.zoomMap && window.zoomMap(-1)", null)
+        }, LinearLayout.LayoutParams(dp(52), dp(52)).apply { topMargin = dp(8) })
+        val controlParams = FrameLayout.LayoutParams(dp(52), -2, Gravity.RIGHT or Gravity.BOTTOM).apply {
+            rightMargin = dp(16)
+            bottomMargin = dp(104)
+        }
+        root.addView(controls, controlParams)
+
+        val locate = Button(this).apply {
+            text = "◎"
+            textSize = 27f
+            isAllCaps = false
+            contentDescription = "Моё местоположение"
+            setTextColor(Color.rgb(24, 31, 42))
+            background = rounded(Color.WHITE, 18)
             setOnClickListener { locateMe(map) }
         }
-        mapCard.addView(gpsButton, margin(top = 10))
-        mapCard.addView(TextView(this).apply {
-            text = "Числа на карте — демонстрационная оценка спроса, не реальные коэффициенты Яндекс Про. Реальные значения появятся после подключения источника данных."
-            textSize = 11f
-            setTextColor(muted)
-            setPadding(dp(4), dp(9), dp(4), dp(2))
+        root.addView(locate, FrameLayout.LayoutParams(dp(58), dp(58), Gravity.RIGHT or Gravity.BOTTOM).apply {
+            rightMargin = dp(13)
+            bottomMargin = dp(28)
         })
-        page.addView(mapCard, margin(top = 8))
 
-        page.addView(sectionTitle("История наблюдений"), margin(top = 24))
-        emptyHistory = TextView(this).apply {
-            text = "История заполнится после подключения автоматического считывания коэффициентов."
-            textSize = 13f
-            setTextColor(muted)
-            setPadding(dp(2), dp(8), dp(2), dp(8))
-        }
-        historyBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        page.addView(emptyHistory)
-        page.addView(historyBox)
-
-        page.addView(TextView(this).apply {
-            text = "Оценочные значения на карте показаны для демонстрации. Они не являются данными Яндекс Про."
-            textSize = 11f
-            setTextColor(muted)
-            setPadding(0, dp(24), 0, dp(4))
-        })
-        val screen = FrameLayout(this)
-        screen.addView(root, FrameLayout.LayoutParams(-1, -1))
-
-        // Premium black-and-gold branded intro overlay; the dashboard is prepared underneath.
+        // Заставка сохраняется; после неё открывается только карта.
         val splash = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -278,29 +115,18 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.rgb(3, 4, 6))
             alpha = 0f
         }
-        val halo = TextView(this).apply {
-            text = " "
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.TRANSPARENT)
-                setStroke(dp(2), Color.rgb(226, 174, 20))
-            }
-        }
-        val taxi = TextView(this).apply {
+        splash.addView(TextView(this).apply {
             text = "🚕"
             textSize = 76f
             gravity = Gravity.CENTER
             setShadowLayer(dp(18).toFloat(), 0f, 0f, Color.rgb(255, 190, 0))
-        }
-        splash.addView(taxi, LinearLayout.LayoutParams(-1, dp(126)))
+        }, LinearLayout.LayoutParams(-1, dp(126)))
         splash.addView(TextView(this).apply {
             text = "ТАМБОВ"
             textSize = 39f
             setTextColor(Color.rgb(245, 246, 248))
             gravity = Gravity.CENTER
             typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
-            letterSpacing = .015f
-            setPadding(0, dp(15), 0, 0)
         }, LinearLayout.LayoutParams(-1, -2))
         splash.addView(TextView(this).apply {
             text = "Кэф"
@@ -308,39 +134,16 @@ class MainActivity : Activity() {
             setTextColor(Color.rgb(255, 196, 0))
             gravity = Gravity.CENTER
             typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
-            setShadowLayer(dp(12).toFloat(), 0f, dp(2).toFloat(), Color.rgb(130, 85, 0))
         }, LinearLayout.LayoutParams(-1, -2))
-        val goldLine = View(this).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(255, 190, 0))
-                cornerRadius = dp(3).toFloat()
-            }
-        }
-        splash.addView(goldLine, LinearLayout.LayoutParams(dp(190), dp(3)).apply {
-            gravity = Gravity.CENTER
-            topMargin = dp(8)
-        })
         splash.addView(TextView(this).apply {
-            text = "Следи за коэффициентами\\nв Яндекс Такси"
-            textSize = 16f
+            text = "Коэффициенты спроса на карте"
+            textSize = 15f
             setTextColor(Color.rgb(184, 187, 193))
             gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif", Typeface.ITALIC)
-            setLineSpacing(dp(4).toFloat(), 1f)
-            setPadding(0, dp(22), 0, dp(10))
+            setPadding(0, dp(18), 0, 0)
         }, LinearLayout.LayoutParams(-1, -2))
-        splash.addView(TextView(this).apply {
-            text = "▪  ▪  ▪  ▪  ▪  ▪"
-            textSize = 17f
-            letterSpacing = .2f
-            setTextColor(Color.rgb(255, 196, 0))
-            gravity = Gravity.CENTER
-            setPadding(0, dp(24), 0, 0)
-        }, LinearLayout.LayoutParams(-1, -2))
-        screen.addView(splash, FrameLayout.LayoutParams(-1, -1))
-        setContentView(screen)
-        renderHistory()
-        renderOcrDebug()
+        root.addView(splash, FrameLayout.LayoutParams(-1, -1))
+        setContentView(root)
 
         splash.animate().alpha(1f).setDuration(220L).start()
         Handler(Looper.getMainLooper()).postDelayed({
