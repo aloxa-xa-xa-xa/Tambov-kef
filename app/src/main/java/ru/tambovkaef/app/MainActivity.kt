@@ -385,11 +385,11 @@ class MainActivity : Activity() {
                     apiStatus.text = if (prices.isEmpty()) {
                         "Яндекс не вернул тарифы для этой точки. Проверь регион и доступ API."
                     } else {
-                        val lines = prices.joinToString("\\n") { item ->
+                        val lines = prices.joinToString("\n") { item ->
                             val ratio = item.multiplier?.let { String.format(Locale.US, " • индекс цены %.2fx", it) } ?: ""
                             "${item.title}: ${String.format(Locale.US, "%.0f", item.price)} ${item.currency}${ratio}"
                         }
-                        lines + "\\n\\nЭто ориентир по цене подачи с надбавкой, а не коэффициент Яндекс Про. Фактическая цена зависит от спроса и доступности машин."
+                        lines + "\n\nЭто ориентир по цене подачи с надбавкой, а не коэффициент Яндекс Про. Фактическая цена зависит от спроса и доступности машин."
                     }
                 }
             } catch (e: Exception) {
