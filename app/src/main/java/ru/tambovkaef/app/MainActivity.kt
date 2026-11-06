@@ -270,49 +270,86 @@ class MainActivity : Activity() {
         val screen = FrameLayout(this)
         screen.addView(root, FrameLayout.LayoutParams(-1, -1))
 
-        // Short branded intro overlay; the main screen is already prepared underneath.
+        // Premium black-and-gold branded intro overlay; the dashboard is prepared underneath.
         val splash = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(28), dp(28), dp(28), dp(28))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(bg, Color.rgb(25, 42, 62))
-            )
+            setPadding(dp(26), dp(30), dp(26), dp(30))
+            setBackgroundColor(Color.rgb(3, 4, 6))
+            alpha = 0f
         }
-        splash.addView(TextView(this).apply {
+        val halo = TextView(this).apply {
+            text = " "
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(2), Color.rgb(226, 174, 20))
+            }
+        }
+        val taxi = TextView(this).apply {
             text = "🚕"
-            textSize = 62f
+            textSize = 76f
             gravity = Gravity.CENTER
+            setShadowLayer(dp(18).toFloat(), 0f, 0f, Color.rgb(255, 190, 0))
+        }
+        splash.addView(taxi, LinearLayout.LayoutParams(-1, dp(126)))
+        splash.addView(TextView(this).apply {
+            text = "ТАМБОВ"
+            textSize = 39f
+            setTextColor(Color.rgb(245, 246, 248))
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
+            letterSpacing = .015f
+            setPadding(0, dp(15), 0, 0)
         }, LinearLayout.LayoutParams(-1, -2))
         splash.addView(TextView(this).apply {
-            text = "Тамбов Кэф"
-            textSize = 32f
-            setTextColor(white)
+            text = "Кэф"
+            textSize = 58f
+            setTextColor(Color.rgb(255, 196, 0))
             gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            setPadding(0, dp(12), 0, dp(5))
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
+            setShadowLayer(dp(12).toFloat(), 0f, dp(2).toFloat(), Color.rgb(130, 85, 0))
+        }, LinearLayout.LayoutParams(-1, -2))
+        val goldLine = View(this).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(255, 190, 0))
+                cornerRadius = dp(3).toFloat()
+            }
+        }
+        splash.addView(goldLine, LinearLayout.LayoutParams(dp(190), dp(3)).apply {
+            gravity = Gravity.CENTER
+            topMargin = dp(8)
+        })
+        splash.addView(TextView(this).apply {
+            text = "Следи за коэффициентами\\nв Яндекс Такси"
+            textSize = 16f
+            setTextColor(Color.rgb(184, 187, 193))
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif", Typeface.ITALIC)
+            setLineSpacing(dp(4).toFloat(), 1f)
+            setPadding(0, dp(22), 0, dp(10))
         }, LinearLayout.LayoutParams(-1, -2))
         splash.addView(TextView(this).apply {
-            text = "КОЭФФИЦИЕНТЫ  •  СПРОС  •  ИСТОРИЯ"
-            textSize = 10f
-            letterSpacing = .12f
-            setTextColor(green)
+            text = "▪  ▪  ▪  ▪  ▪  ▪"
+            textSize = 17f
+            letterSpacing = .2f
+            setTextColor(Color.rgb(255, 196, 0))
             gravity = Gravity.CENTER
-            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(24), 0, 0)
         }, LinearLayout.LayoutParams(-1, -2))
         screen.addView(splash, FrameLayout.LayoutParams(-1, -1))
         setContentView(screen)
         renderHistory()
         renderOcrDebug()
 
+        splash.animate().alpha(1f).setDuration(220L).start()
         Handler(Looper.getMainLooper()).postDelayed({
             if (!isFinishing && splash.parent != null) {
-                splash.animate().alpha(0f).setDuration(260L).withEndAction {
+                splash.animate().alpha(0f).setDuration(320L).withEndAction {
                     (splash.parent as? FrameLayout)?.removeView(splash)
                 }.start()
             }
-        }, 850L)
+        }, 1050L)
     }
 
     override fun onResume() {
