@@ -71,7 +71,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(7), 0, dp(3))
         })
         page.addView(TextView(this).apply {
-            text = "Наблюдай за коэффициентами и сохраняй изменения"
+            text = "Автоматический мониторинг спроса в разработке"
             textSize = 14f
             setTextColor(muted)
         })
@@ -94,7 +94,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(5), 0, dp(3))
         })
         statusCard.addView(TextView(this).apply {
-            text = "Ручной ввод убран. Сейчас доступна карта города и определение твоего положения по GPS."
+            text = "Ручной ввод отключён. GPS-кнопка покажет твоё положение; автоматическое считывание пока подключается."
             textSize = 12f
             setTextColor(muted)
         })
@@ -133,7 +133,7 @@ class MainActivity : Activity() {
 
         page.addView(sectionTitle("История наблюдений"), margin(top = 24))
         emptyHistory = TextView(this).apply {
-            text = "Здесь появятся сохранённые значения. Добавь первое наблюдение выше."
+            text = "История заполнится после подключения автоматического считывания коэффициентов."
             textSize = 13f
             setTextColor(muted)
             setPadding(dp(2), dp(8), dp(2), dp(8))
@@ -143,7 +143,7 @@ class MainActivity : Activity() {
         page.addView(historyBox)
 
         page.addView(TextView(this).apply {
-            text = "Карта использует OpenStreetMap. Автоматическое распознавание коэффициентов Яндекс Про ещё не подключено."
+            text = "Карта использует OpenStreetMap. Коэффициенты пока не считываются автоматически."
             textSize = 11f
             setTextColor(muted)
             setPadding(0, dp(24), 0, dp(4))
