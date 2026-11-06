@@ -3,6 +3,8 @@ package ru.tambovkaef.app
 import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
+import android.provider.Settings
+import android.net.Uri
 import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
@@ -213,6 +215,13 @@ class MainActivity : Activity() {
     }
 
     private fun requestScreenCapture() {
+        if (!Settings.canDrawOverlays(this)) {
+            val overlayIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + packageName))
+            @Suppress("DEPRECATION")
+            startActivityForResult(overlayIntent, 703)
+            Toast.makeText(this, "Разреши показ окна поверх других приложений, затем мониторинг продолжится.", Toast.LENGTH_LONG).show()
+            return
+        }
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         @Suppress("DEPRECATION")
         startActivityForResult(manager.createScreenCaptureIntent(), 702)
@@ -221,6 +230,10 @@ class MainActivity : Activity() {
     @Deprecated("Uses Activity result callback for compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 703) {
+            if (Settings.canDrawOverlays(this)) requestScreenCapture()
+            else Toast.makeText(this, "Без разрешения на окно поверх приложений плавающее окошко не появится.", Toast.LENGTH_LONG).show()
+        }
         if (requestCode == 702) {
             if (resultCode == RESULT_OK && data != null) {
                 val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
