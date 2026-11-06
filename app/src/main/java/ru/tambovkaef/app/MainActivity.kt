@@ -100,7 +100,29 @@ class MainActivity : Activity() {
         })
         page.addView(statusCard, margin(top = 22))
 
-        page.addView(sectionTitle("Коэффициенты"))
+        page.addView(sectionTitle("Карта Тамбова"), margin(top = 20))
+        val mapCard = card().apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        val map = android.webkit.WebView(this).apply {
+            setBackgroundColor(panel)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.loadsImagesAutomatically = true
+            webViewClient = android.webkit.WebViewClient()
+            loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=41.38%2C52.68%2C41.53%2C52.77&layer=mapnik&marker=52.7213%2C41.4523")
+        }
+        mapCard.addView(map, LinearLayout.LayoutParams(-1, dp(250)))
+        mapCard.addView(TextView(this).apply {
+            text = "Карта города. Слой спроса появится после подключения обмена наблюдениями между водителями."
+            textSize = 11f
+            setTextColor(muted)
+            setPadding(dp(4), dp(9), dp(4), dp(2))
+        })
+        page.addView(mapCard, margin(top = 8))
+
+        page.addView(sectionTitle("Коэффициенты"), margin(top = 18))
         val inputCard = card()
         inputCard.orientation = LinearLayout.VERTICAL
         inputCard.setPadding(dp(16), dp(15), dp(16), dp(16))
