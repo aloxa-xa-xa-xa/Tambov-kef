@@ -1,6 +1,9 @@
 package ru.tambovkaef.app
 
 import android.app.Activity
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
 import android.location.Location
@@ -98,6 +101,18 @@ class MainActivity : Activity() {
             textSize = 12f
             setTextColor(muted)
         })
+        val monitorButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        monitorButtons.addView(Button(this).apply {
+            text = "Запустить мониторинг"
+            isAllCaps = false
+            setOnClickListener { requestScreenCapture() }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        monitorButtons.addView(Button(this).apply {
+            text = "Остановить"
+            isAllCaps = false
+            setOnClickListener { stopService(Intent(this@MainActivity, ScreenCaptureService::class.java)) }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        statusCard.addView(monitorButtons, margin(top = 12))
         page.addView(statusCard, margin(top = 22))
 
         page.addView(sectionTitle("Карта Тамбова"), margin(top = 20))
@@ -152,6 +167,28 @@ class MainActivity : Activity() {
         renderHistory()
     }
 
+    private fun requestScreenCapture() {
+        val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        @Suppress("DEPRECATION")
+        startActivityForResult(manager.createScreenCaptureIntent(), 702)
+    }
+
+    @Deprecated("Uses Activity result callback for compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 702) {
+            if (resultCode == RESULT_OK && data != null) {
+                val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+                    putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
+                    putExtra(ScreenCaptureService.EXTRA_DATA, data)
+                }
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+                Toast.makeText(this, "Мониторинг экрана запущен", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Без разрешения Android мониторинг не запустится", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     private fun locateMe(map: android.webkit.WebView) {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
