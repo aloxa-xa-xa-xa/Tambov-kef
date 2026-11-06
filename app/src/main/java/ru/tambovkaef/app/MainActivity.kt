@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("tambov_kaef", MODE_PRIVATE) }
     private lateinit var historyBox: LinearLayout
     private lateinit var emptyHistory: TextView
+    private lateinit var ocrDebug: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,7 +98,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(5), 0, dp(3))
         })
         statusCard.addView(TextView(this).apply {
-            text = "Ручной ввод отключён. GPS-кнопка покажет твоё положение; автоматическое считывание пока подключается."
+            text = "Ручной ввод отключён. Мониторинг читает экран только после разрешения Android; точность распознавания ещё проверяется."
             textSize = 12f
             setTextColor(muted)
         })
@@ -114,6 +115,31 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
         statusCard.addView(monitorButtons, margin(top = 12))
         page.addView(statusCard, margin(top = 22))
+
+        val debugCard = card().apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(15), dp(13), dp(15), dp(13))
+        }
+        debugCard.addView(TextView(this).apply {
+            text = "ЧТО РАСПОЗНАЛ МОНИТОРИНГ"
+            textSize = 10f
+            letterSpacing = .1f
+            setTextColor(muted)
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        ocrDebug = TextView(this).apply {
+            text = "Пока нет данных. Запусти мониторинг и открой экран коэффициентов в Яндекс Про."
+            textSize = 12f
+            setTextColor(white)
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        debugCard.addView(ocrDebug)
+        debugCard.addView(Button(this).apply {
+            text = "Обновить распознанный текст"
+            isAllCaps = false
+            setOnClickListener { renderOcrDebug(); renderHistory() }
+        })
+        page.addView(debugCard, margin(top = 12))
 
         page.addView(sectionTitle("Карта Тамбова"), margin(top = 20))
         val mapCard = card().apply {
@@ -158,13 +184,32 @@ class MainActivity : Activity() {
         page.addView(historyBox)
 
         page.addView(TextView(this).apply {
-            text = "Карта использует OpenStreetMap. Коэффициенты пока не считываются автоматически."
+            text = "Карта использует OpenStreetMap. Слой спроса появится после подключения обмена наблюдениями."
             textSize = 11f
             setTextColor(muted)
             setPadding(0, dp(24), 0, dp(4))
         })
         setContentView(root)
         renderHistory()
+        renderOcrDebug()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::historyBox.isInitialized) renderHistory()
+        if (::ocrDebug.isInitialized) renderOcrDebug()
+    }
+
+    private fun renderOcrDebug() {
+        if (!::ocrDebug.isInitialized) return
+        val text = prefs.getString("last_ocr_text", "").orEmpty()
+        val time = prefs.getLong("last_ocr_time", 0L)
+        ocrDebug.text = if (text.isBlank()) {
+            "Пока нет распознанного текста. Запусти мониторинг, подтверди системное разрешение и открой экран коэффициентов в Яндекс Про."
+        } else {
+            val stamp = SimpleDateFormat("HH:mm:ss", Locale("ru")).format(Date(time))
+            "Последнее чтение: $stamp\\n\\n" + text.take(1800)
+        }
     }
 
     private fun requestScreenCapture() {
