@@ -208,7 +208,7 @@ class MainActivity : Activity() {
             "Пока нет распознанного текста. Запусти мониторинг, подтверди системное разрешение и открой экран коэффициентов в Яндекс Про."
         } else {
             val stamp = SimpleDateFormat("HH:mm:ss", Locale("ru")).format(Date(time))
-            "Последнее чтение: $stamp\\n\\n" + text.take(1800)
+            "Последнее чтение: $stamp\n\n" + text.take(1800)
         }
     }
 
