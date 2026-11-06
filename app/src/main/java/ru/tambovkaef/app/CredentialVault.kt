@@ -11,11 +11,16 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** Stores Yandex API credentials encrypted with an Android Keystore AES-GCM key. */
+/** Creates a per-installation AES key in Android Keystore and encrypts optional API credentials. */
 object CredentialVault {
     private const val STORE = "yandex_api_credentials"
     private const val ALIAS = "tambov_kaef_yandex_api_aes"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
+
+    /** Generate the device-local key on first launch; no secret is embedded in the APK. */
+    fun initialize() {
+        getOrCreateKey()
+    }
 
     fun save(context: Context, clid: String, apiKey: String) {
         require(clid.isNotBlank() && apiKey.isNotBlank()) { "Заполни оба поля" }
