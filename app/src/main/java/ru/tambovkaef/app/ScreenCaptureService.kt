@@ -21,6 +21,9 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.regex.Pattern
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Locale
 
 class ScreenCaptureService : Service() {
     private var projection: MediaProjection? = null
@@ -97,12 +100,35 @@ class ScreenCaptureService : Service() {
                             .putString("last_ocr_text", text)
                             .putLong("last_ocr_time", System.currentTimeMillis())
                             .apply()
-                        val multiplier = Pattern.compile("(?i)(?:x|х)\\s?([0-9]+[.,]?[0-9]*)|([0-9]+[.,]?[0-9]*)\\s?(?:x|х)")
-                            .matcher(text)
-                        if (multiplier.find()) {
-                            val value = multiplier.group(1) ?: multiplier.group(2) ?: ""
+                        val economy = findTariffMultiplier(text, "эконом")
+                        val comfort = findTariffMultiplier(text, "комфорт")
+                        if (economy != null || comfort != null) {
+                            val prefs = getSharedPreferences("tambov_kaef", MODE_PRIVATE)
+                            val now = System.currentTimeMillis()
+                            val previousTime = prefs.getLong("last_saved_ocr_time", 0L)
+                            val previousEconomy = prefs.getString("last_saved_economy", "") ?: ""
+                            val previousComfort = prefs.getString("last_saved_comfort", "") ?: ""
+                            if (now - previousTime > 60_000L || economy.orEmpty() != previousEconomy || comfort.orEmpty() != previousComfort) {
+                                val history = try { JSONArray(prefs.getString("history", "[]")) } catch (_: Exception) { JSONArray() }
+                                val item = JSONObject()
+                                    .put("time", now)
+                                    .put("economy", economy ?: "")
+                                    .put("comfort", comfort ?: "")
+                                history.put(item)
+                                while (history.length() > 50) history.remove(0)
+                                prefs.edit()
+                                    .putString("history", history.toString())
+                                    .putLong("last_saved_ocr_time", now)
+                                    .putString("last_saved_economy", economy ?: previousEconomy)
+                                    .putString("last_saved_comfort", comfort ?: previousComfort)
+                                    .apply()
+                            }
+                            val summary = listOfNotNull(
+                                economy?.let { "Эконом x$it" },
+                                comfort?.let { "Комфорт x$it" }
+                            ).joinToString(" • ")
                             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                            manager.notify(NOTIFICATION_ID, notification("На экране найден коэффициент: x$value"))
+                            manager.notify(NOTIFICATION_ID, notification(summary))
                         }
                     }
                 }
@@ -115,6 +141,27 @@ class ScreenCaptureService : Service() {
             image.close()
             processing = false
         }
+    }
+
+    private fun findTariffMultiplier(fullText: String, tariff: String): String? {
+        val lines = fullText.lines()
+        val numberPattern = Pattern.compile("(?i)(?:x|х)\\s*([0-9]+[.,]?[0-9]*)|([0-9]+[.,]?[0-9]*)\\s*(?:x|х)")
+        for (index in lines.indices) {
+            val normalized = lines[index].lowercase(Locale.ROOT)
+            val matchesTariff = if (tariff == "эконом") {
+                normalized.contains("эконом") || normalized.contains("econom")
+            } else {
+                normalized.contains("комфорт") || normalized.contains("comfort")
+            }
+            if (!matchesTariff) continue
+            val from = maxOf(0, index - 1)
+            val to = minOf(lines.lastIndex, index + 2)
+            for (lineIndex in from..to) {
+                val matcher = numberPattern.matcher(lines[lineIndex])
+                if (matcher.find()) return (matcher.group(1) ?: matcher.group(2))?.replace(',', '.')
+            }
+        }
+        return null
     }
 
     private fun createChannel() {
