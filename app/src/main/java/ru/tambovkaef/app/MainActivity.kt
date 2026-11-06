@@ -1,6 +1,10 @@
 package ru.tambovkaef.app
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -8,12 +12,10 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import android.text.InputType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -29,8 +31,6 @@ class MainActivity : Activity() {
     private val blue = Color.rgb(93, 151, 255)
     private val prefs by lazy { getSharedPreferences("tambov_kaef", MODE_PRIVATE) }
     private lateinit var historyBox: LinearLayout
-    private lateinit var economy: EditText
-    private lateinit var comfort: EditText
     private lateinit var emptyHistory: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,14 +87,14 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
         })
         statusCard.addView(TextView(this).apply {
-            text = "Ручной режим"
+            text = "Автоматизация в разработке"
             textSize = 19f
             setTextColor(white)
             typeface = Typeface.DEFAULT_BOLD
             setPadding(0, dp(5), 0, dp(3))
         })
         statusCard.addView(TextView(this).apply {
-            text = "Пока вводишь значения сам. Автоматическое чтение Яндекс Про и общая карта ещё в разработке."
+            text = "Ручной ввод убран. Сейчас доступна карта города и определение твоего положения по GPS."
             textSize = 12f
             setTextColor(muted)
         })
@@ -114,6 +114,15 @@ class MainActivity : Activity() {
             loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=41.38%2C52.68%2C41.53%2C52.77&layer=mapnik&marker=52.7213%2C41.4523")
         }
         mapCard.addView(map, LinearLayout.LayoutParams(-1, dp(250)))
+        val gpsButton = Button(this).apply {
+            text = "◎  Где я нахожусь"
+            textSize = 14f
+            isAllCaps = false
+            setTextColor(Color.rgb(8, 26, 22))
+            background = rounded(green, 14)
+            setOnClickListener { locateMe(map) }
+        }
+        mapCard.addView(gpsButton, margin(top = 10))
         mapCard.addView(TextView(this).apply {
             text = "Карта города. Слой спроса появится после подключения обмена наблюдениями между водителями."
             textSize = 11f
@@ -121,39 +130,6 @@ class MainActivity : Activity() {
             setPadding(dp(4), dp(9), dp(4), dp(2))
         })
         page.addView(mapCard, margin(top = 8))
-
-        page.addView(sectionTitle("Коэффициенты"), margin(top = 18))
-        val inputCard = card()
-        inputCard.orientation = LinearLayout.VERTICAL
-        inputCard.setPadding(dp(16), dp(15), dp(16), dp(16))
-        inputCard.addView(TextView(this).apply {
-            text = "Введи значения, которые видишь в Яндекс Про"
-            textSize = 13f
-            setTextColor(muted)
-        })
-        val fields = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        economy = numberField("Эконом", "1,5")
-        comfort = numberField("Комфорт", "1,8")
-        fields.addView(fieldColumn("ЭКОНОМ", economy), LinearLayout.LayoutParams(0, -2, 1f))
-        val gap = View(this)
-        fields.addView(gap, LinearLayout.LayoutParams(dp(12), 1))
-        fields.addView(fieldColumn("КОМФОРТ", comfort), LinearLayout.LayoutParams(0, -2, 1f))
-        inputCard.addView(fields, margin(top = 14))
-        val save = Button(this).apply {
-            text = "Сохранить наблюдение"
-            textSize = 15f
-            isAllCaps = false
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(8, 26, 22))
-            background = rounded(green, 14)
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnClickListener { saveObservation() }
-        }
-        inputCard.addView(save, margin(top = 16))
-        page.addView(inputCard, margin(top = 10))
 
         page.addView(sectionTitle("История наблюдений"), margin(top = 24))
         emptyHistory = TextView(this).apply {
@@ -167,7 +143,7 @@ class MainActivity : Activity() {
         page.addView(historyBox)
 
         page.addView(TextView(this).apply {
-            text = "Данные вводятся вручную и хранятся на этом устройстве. Это не официальный поток данных Яндекса."
+            text = "Карта использует OpenStreetMap. Автоматическое распознавание коэффициентов Яндекс Про ещё не подключено."
             textSize = 11f
             setTextColor(muted)
             setPadding(0, dp(24), 0, dp(4))
@@ -176,23 +152,30 @@ class MainActivity : Activity() {
         renderHistory()
     }
 
-    private fun saveObservation() {
-        val e = economy.text.toString().trim().replace(',', '.')
-        val c = comfort.text.toString().trim().replace(',', '.')
-        if (e.isEmpty() && c.isEmpty()) {
-            Toast.makeText(this, "Введи хотя бы один коэффициент", Toast.LENGTH_SHORT).show()
+    private fun locateMe(map: android.webkit.WebView) {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 701)
+            Toast.makeText(this, "Разреши доступ к местоположению", Toast.LENGTH_SHORT).show()
             return
         }
-        val item = JSONObject().put("economy", e).put("comfort", c)
-            .put("time", System.currentTimeMillis())
-        val array = readHistory()
-        array.put(0, item)
-        while (array.length() > 50) array.remove(array.length() - 1)
-        prefs.edit().putString("history", array.toString()).apply()
-        economy.text.clear()
-        comfort.text.clear()
-        renderHistory()
-        Toast.makeText(this, "Наблюдение сохранено", Toast.LENGTH_SHORT).show()
+        try {
+            val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+            val location: Location? = manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            if (location == null) {
+                Toast.makeText(this, "Положение пока недоступно. Включи GPS и нажми ещё раз.", Toast.LENGTH_LONG).show()
+                return
+            }
+            val lat = location.latitude
+            val lon = location.longitude
+            val delta = 0.025
+            val bbox = "${lon-delta},${lat-delta},${lon+delta},${lat+delta}"
+            map.loadUrl("https://www.openstreetmap.org/export/embed.html?bbox=${android.net.Uri.encode(bbox)}&layer=mapnik&marker=$lat%2C$lon")
+            Toast.makeText(this, "Нашёл твоё положение", Toast.LENGTH_SHORT).show()
+        } catch (_: SecurityException) {
+            Toast.makeText(this, "Нет разрешения на геолокацию", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun readHistory(): JSONArray = try {
@@ -239,30 +222,6 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(color)
         })
-    }
-
-    private fun numberField(hintText: String, example: String) = EditText(this).apply {
-        hint = example
-        textSize = 19f
-        setSingleLine(true)
-        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-        setTextColor(white)
-        setHintTextColor(Color.rgb(104, 117, 137))
-        setPadding(dp(12), dp(12), dp(12), dp(12))
-        background = rounded(Color.rgb(34, 45, 62), 12, Color.rgb(48, 63, 84))
-    }
-
-    private fun fieldColumn(label: String, field: EditText) = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(TextView(this@MainActivity).apply {
-            text = label
-            textSize = 10f
-            letterSpacing = .1f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(muted)
-            setPadding(0, 0, 0, dp(6))
-        })
-        addView(field, LinearLayout.LayoutParams(-1, dp(54)))
     }
 
     private fun sectionTitle(text: String) = TextView(this).apply {
