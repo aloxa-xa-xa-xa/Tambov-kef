@@ -3,6 +3,7 @@
     <application
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:label="Тамбов Кэф"
+        android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true">
