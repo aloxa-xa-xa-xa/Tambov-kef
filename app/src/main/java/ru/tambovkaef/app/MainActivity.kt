@@ -162,7 +162,7 @@ class MainActivity : Activity() {
         })
         clidInput = EditText(this).apply {
             hint = "clid"
-            singleLine = true
+            setSingleLine(true)
             setTextColor(white)
             setHintTextColor(muted)
             setPadding(dp(10), dp(7), dp(10), dp(7))
@@ -171,7 +171,7 @@ class MainActivity : Activity() {
         apiCard.addView(clidInput, margin(top = 10))
         apiKeyInput = EditText(this).apply {
             hint = "API-ключ"
-            singleLine = true
+            setSingleLine(true)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setTextColor(white)
             setHintTextColor(muted)
