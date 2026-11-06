@@ -17,10 +17,13 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.text.InputType
+import java.util.concurrent.Executors
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -38,6 +41,10 @@ class MainActivity : Activity() {
     private lateinit var historyBox: LinearLayout
     private lateinit var emptyHistory: TextView
     private lateinit var ocrDebug: TextView
+    private lateinit var apiStatus: TextView
+    private lateinit var clidInput: EditText
+    private lateinit var apiKeyInput: EditText
+    private val apiExecutor = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -142,6 +149,70 @@ class MainActivity : Activity() {
             setOnClickListener { renderOcrDebug(); renderHistory() }
         })
         page.addView(debugCard, margin(top = 12))
+
+        page.addView(sectionTitle("Подключение API Яндекса"), margin(top = 22))
+        val apiCard = card().apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(15), dp(14), dp(15), dp(14))
+        }
+        apiCard.addView(TextView(this).apply {
+            text = "Введи выданные Яндексом clid и API-ключ. Данные хранятся локально в зашифрованном виде."
+            textSize = 12f
+            setTextColor(muted)
+        })
+        clidInput = EditText(this).apply {
+            hint = "clid"
+            singleLine = true
+            setTextColor(white)
+            setHintTextColor(muted)
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            setBackground(rounded(bg, 10))
+        }
+        apiCard.addView(clidInput, margin(top = 10))
+        apiKeyInput = EditText(this).apply {
+            hint = "API-ключ"
+            singleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setTextColor(white)
+            setHintTextColor(muted)
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            setBackground(rounded(bg, 10))
+        }
+        apiCard.addView(apiKeyInput, margin(top = 8))
+        apiCard.addView(Button(this).apply {
+            text = "Сохранить ключи"
+            isAllCaps = false
+            setOnClickListener {
+                try {
+                    CredentialVault.save(this@MainActivity, clidInput.text.toString().trim(), apiKeyInput.text.toString().trim())
+                    apiKeyInput.text.clear()
+                    apiStatus.text = "Доступ сохранён на этом устройстве."
+                    Toast.makeText(this@MainActivity, "Ключи сохранены", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    apiStatus.text = "Не удалось сохранить доступ: ${e.message ?: "ошибка"}"
+                }
+            }
+        }, margin(top = 8))
+        apiCard.addView(Button(this).apply {
+            text = "Проверить цены по GPS"
+            isAllCaps = false
+            setOnClickListener { fetchYandexPrices() }
+        }, margin(top = 6))
+        apiStatus = TextView(this).apply {
+            text = "Пока нет проверки. Нужны официально выданные clid и API-ключ."
+            textSize = 12f
+            setTextColor(muted)
+            setPadding(0, dp(9), 0, 0)
+        }
+        apiCard.addView(apiStatus)
+        page.addView(apiCard, margin(top = 8))
+        try {
+            val saved = CredentialVault.load(this)
+            clidInput.setText(saved?.first.orEmpty())
+            if (saved != null) apiStatus.text = "Ключи уже сохранены. Для повторной проверки нажми кнопку ниже."
+        } catch (_: Exception) {
+            apiStatus.text = "Не удалось прочитать сохранённый доступ. Введи ключи заново."
+        }
 
         page.addView(sectionTitle("Карта Тамбова"), margin(top = 20))
         val mapCard = card().apply {
@@ -270,6 +341,62 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Нашёл твоё положение", Toast.LENGTH_SHORT).show()
         } catch (_: SecurityException) {
             Toast.makeText(this, "Нет разрешения на геолокацию", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun fetchYandexPrices() {
+        val clid = clidInput.text.toString().trim()
+        val key = apiKeyInput.text.toString().trim()
+        if (clid.isNotBlank() && key.isNotBlank()) {
+            try {
+                CredentialVault.save(this, clid, key)
+                apiKeyInput.text.clear()
+            } catch (e: Exception) {
+                apiStatus.text = "Ошибка сохранения ключей: ${e.message ?: "ошибка"}"
+                return
+            }
+        }
+        val credentials = try { CredentialVault.load(this) } catch (_: Exception) { null }
+        if (credentials == null) {
+            apiStatus.text = "Сначала введи и сохрани clid и API-ключ."
+            return
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 701)
+            apiStatus.text = "Разреши геолокацию и снова нажми «Проверить цены по GPS»."
+            return
+        }
+        val location = try {
+            val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+            manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+        } catch (_: SecurityException) { null }
+        if (location == null) {
+            apiStatus.text = "Геопозиция пока недоступна. Включи GPS, подожди определения координат и повтори."
+            return
+        }
+        apiStatus.text = "Запрашиваю данные Яндекса…"
+        apiExecutor.execute {
+            try {
+                val prices = YandexPriceClient(credentials.first, credentials.second)
+                    .fetchPointPrices(location.longitude, location.latitude)
+                runOnUiThread {
+                    apiStatus.text = if (prices.isEmpty()) {
+                        "Яндекс не вернул тарифы для этой точки. Проверь регион и доступ API."
+                    } else {
+                        val lines = prices.joinToString("\\n") { item ->
+                            val ratio = item.multiplier?.let { String.format(Locale.US, " • индекс цены %.2fx", it) } ?: ""
+                            "${item.title}: ${String.format(Locale.US, "%.0f", item.price)} ${item.currency}${ratio}"
+                        }
+                        lines + "\\n\\nЭто ориентир по цене подачи с надбавкой, а не коэффициент Яндекс Про. Фактическая цена зависит от спроса и доступности машин."
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    apiStatus.text = "Ошибка API: ${e.message ?: "не удалось получить данные"}"
+                }
+            }
         }
     }
 
