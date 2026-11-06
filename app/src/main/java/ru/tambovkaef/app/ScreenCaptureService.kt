@@ -236,15 +236,40 @@ class ScreenCaptureService : Service() {
         floatingManager = null
     }
 
+    // Normalize Cyrillic/Latin look-alikes and transliterate Russian labels.
+    // The bundled ML Kit Latin model is not a Cyrillic OCR model, so this is a
+    // best-effort fallback, not a guarantee of Russian text recognition.
+    private fun normalizeTariffLabel(value: String): String {
+        val lower = value.lowercase(Locale.ROOT)
+        val map = mapOf(
+            'а' to 'a', 'в' to 'b', 'с' to 'c', 'е' to 'e', 'н' to 'h',
+            'к' to 'k', 'м' to 'm', 'о' to 'o', 'р' to 'p', 'т' to 't',
+            'х' to 'x', 'у' to 'y', 'э' to 'e'
+        )
+        return buildString {
+            lower.forEach { ch ->
+                append(map[ch] ?: when (ch) {
+                    'й' -> "i"; 'ё' -> "e"; 'ф' -> "f"; 'г' -> "g"
+                    'и' -> "i"; 'л' -> "l"; 'д' -> "d"; 'ж' -> "zh"
+                    'з' -> "z"; 'ч' -> "ch"; 'ш' -> "sh"; 'щ' -> "shch"
+                    'ы' -> "y"; 'ь', 'ъ' -> ""; 'ю' -> "yu"; 'я' -> "ya"
+                    else -> ch.toString()
+                })
+            }
+        }
+    }
+
     private fun findTariffMultiplier(fullText: String, tariff: String): String? {
         val lines = fullText.lines()
         val numberPattern = Pattern.compile("(?i)(?:x|х)\\s*([0-9]+[.,]?[0-9]*)|([0-9]+[.,]?[0-9]*)\\s*(?:x|х)")
         for (index in lines.indices) {
-            val normalized = lines[index].lowercase(Locale.ROOT)
+            val normalized = normalizeTariffLabel(lines[index])
             val matchesTariff = if (tariff == "эконом") {
-                normalized.contains("эконом") || normalized.contains("econom")
+                normalized.contains("эконом") || normalized.contains("econom") ||
+                    normalized.contains("ekonom") || normalized.contains("econ")
             } else {
-                normalized.contains("комфорт") || normalized.contains("comfort")
+                normalized.contains("комфорт") || normalized.contains("comfort") ||
+                    normalized.contains("komfort") || normalized.contains("komfor")
             }
             if (!matchesTariff) continue
             val from = maxOf(0, index - 1)
