@@ -215,7 +215,6 @@ class MainActivity : Activity() {
         .leaflet-control-attribution{font-size:9px}</style></head><body><div id="map"></div>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
         const map=L.map('map').setView([52.7213,41.4523],12);
-        window.zoomMap=(delta)=>map.setZoom(map.getZoom()+delta);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
           {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
         const zones=[
