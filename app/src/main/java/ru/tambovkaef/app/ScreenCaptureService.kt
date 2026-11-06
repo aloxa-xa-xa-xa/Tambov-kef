@@ -7,6 +7,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
@@ -17,6 +19,10 @@ import android.os.Build
 import android.os.IBinder
 import android.util.DisplayMetrics
 import android.view.WindowManager
+import android.view.Gravity
+import android.view.MotionEvent
+import android.widget.TextView
+import android.provider.Settings
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -31,6 +37,8 @@ class ScreenCaptureService : Service() {
     private var display: VirtualDisplay? = null
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     @Volatile private var processing = false
+    private var floatingView: TextView? = null
+    private var floatingManager: WindowManager? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,6 +59,7 @@ class ScreenCaptureService : Service() {
         try {
             val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             projection = manager.getMediaProjection(resultCode, data)
+            showFloatingWindow()
             startCapture()
         } catch (_: Exception) {
             stopSelf()
@@ -102,6 +111,7 @@ class ScreenCaptureService : Service() {
                             .apply()
                         val economy = findTariffMultiplier(text, "эконом")
                         val comfort = findTariffMultiplier(text, "комфорт")
+                        updateFloatingWindow(economy, comfort)
                         if (economy != null || comfort != null) {
                             val prefs = getSharedPreferences("tambov_kaef", MODE_PRIVATE)
                             val now = System.currentTimeMillis()
@@ -143,6 +153,89 @@ class ScreenCaptureService : Service() {
         }
     }
 
+
+    private fun showFloatingWindow() {
+        if (!Settings.canDrawOverlays(this) || floatingView != null) return
+        try {
+            floatingManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            val view = TextView(this).apply {
+                text = "Э  —   •   К  —"
+                textSize = 15f
+                setTextColor(Color.WHITE)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                background = GradientDrawable().apply {
+                    setColor(Color.argb(235, 20, 29, 43))
+                    cornerRadius = dp(18).toFloat()
+                    setStroke(dp(1), Color.rgb(67, 211, 145))
+                }
+            }
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.END
+                x = dp(12)
+                y = dp(120)
+            }
+            var startX = 0
+            var startY = 0
+            var touchX = 0f
+            var touchY = 0f
+            view.setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startX = params.x
+                        startY = params.y
+                        touchX = event.rawX
+                        touchY = event.rawY
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        params.x = (startX - (event.rawX - touchX).toInt()).coerceAtLeast(0)
+                        params.y = (startY + (event.rawY - touchY).toInt()).coerceAtLeast(0)
+                        try { floatingManager?.updateViewLayout(view, params) } catch (_: Exception) { }
+                        true
+                    }
+                    else -> true
+                }
+            }
+            floatingManager?.addView(view, params)
+            floatingView = view
+            val prefs = getSharedPreferences("tambov_kaef", MODE_PRIVATE)
+            updateFloatingWindow(
+                prefs.getString("last_saved_economy", null),
+                prefs.getString("last_saved_comfort", null)
+            )
+        } catch (_: Exception) {
+            floatingView = null
+        }
+    }
+
+    private fun updateFloatingWindow(economy: String?, comfort: String?) {
+        val view = floatingView ?: return
+        val prefs = getSharedPreferences("tambov_kaef", MODE_PRIVATE)
+        val e = economy ?: prefs.getString("last_saved_economy", null)
+        val c = comfort ?: prefs.getString("last_saved_comfort", null)
+        view.post {
+            view.text = "Э  " + (e?.let { "x" + it } ?: "—") + "   •   К  " + (c?.let { "x" + it } ?: "—")
+        }
+    }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
+    private fun removeFloatingWindow() {
+        try {
+            floatingView?.let { floatingManager?.removeView(it) }
+        } catch (_: Exception) { }
+        floatingView = null
+        floatingManager = null
+    }
+
     private fun findTariffMultiplier(fullText: String, tariff: String): String? {
         val lines = fullText.lines()
         val numberPattern = Pattern.compile("(?i)(?:x|х)\\s*([0-9]+[.,]?[0-9]*)|([0-9]+[.,]?[0-9]*)\\s*(?:x|х)")
@@ -181,6 +274,7 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        removeFloatingWindow()
         display?.release()
         reader?.close()
         projection?.stop()
