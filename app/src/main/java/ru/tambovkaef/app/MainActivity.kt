@@ -48,6 +48,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Create the installation-specific encryption key automatically on first launch.
+        try { CredentialVault.initialize() } catch (_: Exception) { /* API vault is optional; monitoring remains available. */ }
         window.statusBarColor = bg
         window.navigationBarColor = bg
         window.decorView.systemUiVisibility = 0
