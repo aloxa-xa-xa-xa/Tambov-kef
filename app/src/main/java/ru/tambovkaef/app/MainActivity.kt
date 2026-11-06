@@ -17,6 +17,9 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
+import android.os.Handler
+import android.os.Looper
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -264,9 +267,52 @@ class MainActivity : Activity() {
             setTextColor(muted)
             setPadding(0, dp(24), 0, dp(4))
         })
-        setContentView(root)
+        val screen = FrameLayout(this)
+        screen.addView(root, FrameLayout.LayoutParams(-1, -1))
+
+        // Short branded intro overlay; the main screen is already prepared underneath.
+        val splash = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(28), dp(28), dp(28), dp(28))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(bg, Color.rgb(25, 42, 62))
+            )
+        }
+        splash.addView(TextView(this).apply {
+            text = "🚕"
+            textSize = 62f
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(-1, -2))
+        splash.addView(TextView(this).apply {
+            text = "Тамбов Кэф"
+            textSize = 32f
+            setTextColor(white)
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            setPadding(0, dp(12), 0, dp(5))
+        }, LinearLayout.LayoutParams(-1, -2))
+        splash.addView(TextView(this).apply {
+            text = "КОЭФФИЦИЕНТЫ  •  СПРОС  •  ИСТОРИЯ"
+            textSize = 10f
+            letterSpacing = .12f
+            setTextColor(green)
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(-1, -2))
+        screen.addView(splash, FrameLayout.LayoutParams(-1, -1))
+        setContentView(screen)
         renderHistory()
         renderOcrDebug()
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (!isFinishing && splash.parent != null) {
+                splash.animate().alpha(0f).setDuration(260L).withEndAction {
+                    (splash.parent as? FrameLayout)?.removeView(splash)
+                }.start()
+            }
+        }, 850L)
     }
 
     override fun onResume() {
