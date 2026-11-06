@@ -150,13 +150,13 @@ class MainActivity : Activity() {
         })
         page.addView(debugCard, margin(top = 12))
 
-        page.addView(sectionTitle("Подключение API Яндекса"), margin(top = 22))
+        page.addView(sectionTitle("Дополнительный источник цен (необязательно)"), margin(top = 22))
         val apiCard = card().apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(15), dp(14), dp(15), dp(14))
         }
         apiCard.addView(TextView(this).apply {
-            text = "Введи выданные Яндексом clid и API-ключ. Данные хранятся локально в зашифрованном виде."
+            text = "Мониторинг экрана и история работают без ключей. Эти поля нужны только для отдельного запроса ориентировочных цен через API Яндекса."
             textSize = 12f
             setTextColor(muted)
         })
@@ -199,7 +199,7 @@ class MainActivity : Activity() {
             setOnClickListener { fetchYandexPrices() }
         }, margin(top = 6))
         apiStatus = TextView(this).apply {
-            text = "Пока нет проверки. Нужны официально выданные clid и API-ключ."
+            text = "Без ключей можно пользоваться мониторингом экрана Яндекс Про. API можно подключить позже."
             textSize = 12f
             setTextColor(muted)
             setPadding(0, dp(9), 0, 0)
