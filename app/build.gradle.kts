@@ -24,3 +24,9 @@ android {
         jvmTarget = "17"
     }
 }
+
+// Явно задаём одинаковую JVM-цель для Java и Kotlin.
+tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+    sourceCompatibility = JavaVersion.VERSION_17.toString()
+    targetCompatibility = JavaVersion.VERSION_17.toString()
+}
