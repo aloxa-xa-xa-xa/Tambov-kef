@@ -3,8 +3,6 @@ package ru.tambovkaef.app
 import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
-import android.provider.Settings
-import android.net.Uri
 import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
@@ -102,6 +100,26 @@ class MainActivity : Activity() {
             bottomMargin = dp(104)
         }
         root.addView(controls, controlParams)
+
+        val capture = Button(this).apply {
+            text = "Сканировать SprosTaxi"
+            textSize = 13f
+            isAllCaps = false
+            contentDescription = "Запустить распознавание экрана SprosTaxi"
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(23, 31, 45))
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), Color.rgb(67, 211, 145))
+            }
+            elevation = dp(5).toFloat()
+            setPadding(dp(12), 0, dp(12), 0)
+            setOnClickListener { requestScreenCapture() }
+        }
+        root.addView(capture, FrameLayout.LayoutParams(-2, dp(52), Gravity.LEFT or Gravity.BOTTOM).apply {
+            leftMargin = dp(14)
+            bottomMargin = dp(30)
+        })
 
         val locate = Button(this).apply {
             text = "◎"
@@ -264,13 +282,8 @@ class MainActivity : Activity() {
     }
 
     private fun requestScreenCapture() {
-        if (!Settings.canDrawOverlays(this)) {
-            val overlayIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + packageName))
-            @Suppress("DEPRECATION")
-            startActivityForResult(overlayIntent, 703)
-            Toast.makeText(this, "Разреши показ окна поверх других приложений, затем мониторинг продолжится.", Toast.LENGTH_LONG).show()
-            return
-        }
+        // Захват запускается только после системного подтверждения Android.
+        // Разрешение на плавающее окно необязательно: OCR продолжит работать через уведомление.
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         @Suppress("DEPRECATION")
         startActivityForResult(manager.createScreenCaptureIntent(), 702)
@@ -279,10 +292,6 @@ class MainActivity : Activity() {
     @Deprecated("Uses Activity result callback for compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 703) {
-            if (Settings.canDrawOverlays(this)) requestScreenCapture()
-            else Toast.makeText(this, "Без разрешения на окно поверх приложений плавающее окошко не появится.", Toast.LENGTH_LONG).show()
-        }
         if (requestCode == 702) {
             if (resultCode == RESULT_OK && data != null) {
                 val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
@@ -306,7 +315,7 @@ class MainActivity : Activity() {
         #map.dark-map .leaflet-tile{filter:brightness(.62) invert(1) contrast(1.08) hue-rotate(180deg) saturate(.72)}
         </style></head><body><div id="map"></div>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
-        const map=L.map('map').setView([52.7213,41.4523],12);
+        const map=L.map('map',{zoomControl:false}).setView([52.7213,41.4523],12);
         window.zoomMap=(delta)=>map.setZoom(map.getZoom()+delta);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
           {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
