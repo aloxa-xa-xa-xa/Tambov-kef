@@ -6,6 +6,13 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import org.jsoup.Jsoup
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URLDecoder
+import java.net.URLEncoder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class PromoSearchWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
@@ -15,49 +22,54 @@ class PromoSearchWorker(context: Context, params: WorkerParameters) : CoroutineW
                 "промокод Яндекс Про курьер Тамбов",
                 "промокод Яндекс Go пассажир Тамбов"
             )
-            val found = linkedMapOf<String, String>()
+            val found = linkedMapOf<String, JSONObject>()
             for (query in queries) {
-                val url = "https://html.duckduckgo.com/html/?q=" +
-                    java.net.URLEncoder.encode(query, "UTF-8")
-                val doc = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0 (Android) PromokodyTambov/1.1")
-                    .timeout(15000).get()
+                val searchUrl = "https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(query, "UTF-8")
+                val doc = Jsoup.connect(searchUrl).userAgent("Mozilla/5.0 (Android) PromokodyTambov/1.2").timeout(15000).get()
                 doc.select(".result").take(10).forEach { result ->
                     val title = result.selectFirst(".result__title")?.text().orEmpty()
                     val snippet = result.selectFirst(".result__snippet")?.text().orEmpty()
-                    val link = result.selectFirst(".result__url")?.text().orEmpty()
-                    val text = "$title\n$snippet\n$link"
-                    Regex("(?i)(?<![A-ZА-Я0-9])[A-ZА-Я0-9]{4,16}(?![A-ZА-Я0-9])")
-                        .findAll(text).forEach { match ->
-                            val code = match.value
-                            if (code.any { it.isDigit() } && code.any { it.isLetter() }) {
-                                found.putIfAbsent(code, text.take(240))
-                            }
-                        }
+                    val anchor = result.selectFirst(".result__title a")
+                    var link = anchor?.absUrl("href").orEmpty()
+                    if (link.contains("uddg=")) {
+                        val encoded = link.substringAfter("uddg=").substringBefore("&")
+                        link = try { URLDecoder.decode(encoded, "UTF-8") } catch (_: Exception) { link }
+                    }
+                    val combined = "$title $snippet"
+                    val code = Regex("(?i)(?<![A-ZА-Я0-9])[A-ZА-Я0-9]{4,16}(?![A-ZА-Я0-9])")
+                        .findAll(combined).map { it.value }
+                        .firstOrNull { it.any(Char::isDigit) && it.any(Char::isLetter) }.orEmpty()
+                    if (title.isNotBlank() || link.isNotBlank()) {
+                        val key = if (link.isNotBlank()) link else title
+                        found.putIfAbsent(key, JSONObject().put("code", code).put("title", title)
+                            .put("snippet", snippet).put("url", link).put("query", query))
+                    }
                 }
             }
             val prefs = applicationContext.getSharedPreferences("promo_codes", Context.MODE_PRIVATE)
-            val previous = prefs.getStringSet("known_codes", emptySet()) ?: emptySet()
-            val fresh = found.keys - previous
-            prefs.edit().putStringSet("known_codes", (previous + found.keys).toSet()).apply()
+            val old = try { JSONArray(prefs.getString("search_results", "[]")) } catch (_: Exception) { JSONArray() }
+            val merged = linkedMapOf<String, JSONObject>()
+            for (i in 0 until old.length()) {
+                val item = old.optJSONObject(i) ?: continue
+                merged[item.optString("url").ifBlank { item.optString("title") }] = item
+            }
+            val fresh = found.keys.filter { !merged.containsKey(it) }
+            found.forEach { (key, value) -> merged[key] = value }
+            val output = JSONArray()
+            merged.values.take(100).forEach { output.put(it) }
+            val time = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date())
+            prefs.edit().putString("search_results", output.toString()).putString("last_search", time).apply()
 
             if (fresh.isNotEmpty()) {
                 val notification = NotificationCompat.Builder(applicationContext, Updates.CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentTitle("Найдены новые возможные промокоды")
-                    .setContentText("Новых совпадений: ${fresh.size}. Проверьте условия и срок действия.")
-                    .setStyle(NotificationCompat.BigTextStyle().bigText(
-                        fresh.take(5).joinToString(", ") +
-                            "\nКоды не проверены; проверьте их в приложении сервиса."
-                    ))
-                    .setAutoCancel(true)
-                    .build()
+                    .setContentTitle("Новые результаты поиска")
+                    .setContentText("Новых страниц: ${fresh.size}. Откройте приложение, чтобы посмотреть ссылки.")
+                    .setAutoCancel(true).build()
                 val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.notify(2026, notification)
             }
             Result.success()
-        } catch (_: Exception) {
-            Result.retry()
-        }
+        } catch (_: Exception) { Result.retry() }
     }
 }
