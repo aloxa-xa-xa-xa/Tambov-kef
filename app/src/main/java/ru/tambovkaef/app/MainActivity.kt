@@ -71,7 +71,7 @@ class MainActivity : Activity() {
                     super.onPageFinished(view, url)
                     val show = prefs.getBoolean("map_show_zones", true)
                     val style = prefs.getString("map_style", "standard") ?: "standard"
-                    evaluateJavascript("window.applyMapSettings && window.applyMapSettings($show,'$style')", null)
+                    view?.evaluateJavascript("window.applyMapSettings && window.applyMapSettings($show,'$style')", null)
                 }
             }
             loadDataWithBaseURL("https://tambov-kaef.local/", demandMapHtml(), "text/html", "UTF-8", null)
