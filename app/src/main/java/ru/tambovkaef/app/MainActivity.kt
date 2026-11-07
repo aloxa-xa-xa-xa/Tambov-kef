@@ -107,6 +107,33 @@ class MainActivity : Activity() {
             bottomMargin = dp(28)
         })
 
+        // Аккуратная кнопка настроек карты в верхнем правом углу.
+        val mapSettings = Button(this).apply {
+            text = "⚙"
+            textSize = 23f
+            isAllCaps = false
+            contentDescription = "Настройки карты"
+            setTextColor(Color.rgb(242, 246, 252))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(225, 23, 31, 45))
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), Color.rgb(93, 151, 255))
+            }
+            elevation = dp(5).toFloat()
+            setPadding(0, 0, 0, 0)
+            setOnClickListener {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Настройки карты")
+                    .setMessage("Карта коэффициентов спроса Яндекс Go. Кнопки масштаба и определения местоположения остаются на карте.")
+                    .setPositiveButton("Готово", null)
+                    .show()
+            }
+        }
+        root.addView(mapSettings, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.RIGHT or Gravity.TOP).apply {
+            rightMargin = dp(16)
+            topMargin = dp(42)
+        })
+
         // Заставка сохраняется; после неё открывается только карта.
         val splash = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
