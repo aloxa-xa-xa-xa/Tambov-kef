@@ -17,6 +17,9 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.FrameLayout
 import android.os.Handler
 import android.os.Looper
@@ -63,7 +66,14 @@ class MainActivity : Activity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = true
-            webViewClient = android.webkit.WebViewClient()
+            webViewClient = object : android.webkit.WebViewClient() {
+                override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    val show = prefs.getBoolean("map_show_zones", true)
+                    val style = prefs.getString("map_style", "standard") ?: "standard"
+                    evaluateJavascript("window.applyMapSettings && window.applyMapSettings($show,'$style')", null)
+                }
+            }
             loadDataWithBaseURL("https://tambov-kaef.local/", demandMapHtml(), "text/html", "UTF-8", null)
         }
         root.addView(map, FrameLayout.LayoutParams(-1, -1))
@@ -122,11 +132,7 @@ class MainActivity : Activity() {
             elevation = dp(5).toFloat()
             setPadding(0, 0, 0, 0)
             setOnClickListener {
-                android.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Настройки карты")
-                    .setMessage("Карта коэффициентов спроса Яндекс Go. Кнопки масштаба и определения местоположения остаются на карте.")
-                    .setPositiveButton("Готово", null)
-                    .show()
+                showMapSettings(map)
             }
         }
         root.addView(mapSettings, FrameLayout.LayoutParams(dp(52), dp(52), Gravity.RIGHT or Gravity.TOP).apply {
@@ -188,6 +194,63 @@ class MainActivity : Activity() {
         if (::ocrDebug.isInitialized) renderOcrDebug()
     }
 
+    private fun showMapSettings(map: android.webkit.WebView) {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(8), dp(22), dp(4))
+        }
+        val zonesCheck = CheckBox(this).apply {
+            text = "Показывать коэффициенты и зоны"
+            textSize = 15f
+            setTextColor(white)
+            buttonTintList = android.content.res.ColorStateList.valueOf(blue)
+            isChecked = prefs.getBoolean("map_show_zones", true)
+        }
+        content.addView(zonesCheck)
+        content.addView(TextView(this).apply {
+            text = "Оформление карты"
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(white)
+            setPadding(0, dp(14), 0, dp(6))
+        })
+        val styleGroup = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        val standard = RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "Стандартная"
+            textSize = 15f
+            setTextColor(white)
+            buttonTintList = android.content.res.ColorStateList.valueOf(blue)
+        }
+        val dark = RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "Тёмная"
+            textSize = 15f
+            setTextColor(white)
+            buttonTintList = android.content.res.ColorStateList.valueOf(blue)
+        }
+        styleGroup.addView(standard)
+        styleGroup.addView(dark)
+        if (prefs.getString("map_style", "standard") == "dark") dark.isChecked = true else standard.isChecked = true
+        content.addView(styleGroup)
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setTitle("Настройки карты")
+            .setView(content)
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val show = zonesCheck.isChecked
+                val style = if (dark.isChecked) "dark" else "standard"
+                prefs.edit().putBoolean("map_show_zones", show).putString("map_style", style).apply()
+                map.evaluateJavascript("window.applyMapSettings && window.applyMapSettings($show,'$style')", null)
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+
     private fun renderOcrDebug() {
         if (!::ocrDebug.isInitialized) return
         val text = prefs.getString("last_ocr_text", "").orEmpty()
@@ -239,7 +302,9 @@ class MainActivity : Activity() {
         <style>html,body,#map{height:100%;width:100%;margin:0;background:#17202e}
         .kaef{background:#101722;border:2px solid #f4c542;border-radius:12px;color:#ffd34d;
         font:bold 14px Arial;text-align:center;padding:5px 7px;box-shadow:0 2px 8px #0009;white-space:nowrap}
-        .leaflet-control-attribution{font-size:9px}</style></head><body><div id="map"></div>
+        .leaflet-control-attribution{font-size:9px}
+        #map.dark-map .leaflet-tile{filter:brightness(.62) invert(1) contrast(1.08) hue-rotate(180deg) saturate(.72)}
+        </style></head><body><div id="map"></div>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
         const map=L.map('map').setView([52.7213,41.4523],12);
         window.zoomMap=(delta)=>map.setZoom(map.getZoom()+delta);
@@ -252,11 +317,22 @@ class MainActivity : Activity() {
           {p:[52.746,41.468],v:'2,0×',c:'#e45d59',r:650},
           {p:[52.694,41.440],v:'1,3×',c:'#e7c64b',r:600}
         ];
+        const zoneLayers=[];
         zones.forEach(z=>{
-          L.circle(z.p,{radius:z.r,color:z.c,weight:2,fillColor:z.c,fillOpacity:.22}).addTo(map);
-          L.marker(z.p,{icon:L.divIcon({className:'',html:'<div class="kaef">'+z.v+'</div>',iconSize:[62,30],iconAnchor:[31,15]})})
-            .bindPopup('Оценка спроса: <b>'+z.v+'</b><br>Демонстрационное значение').addTo(map);
+          const circle=L.circle(z.p,{radius:z.r,color:z.c,weight:2,fillColor:z.c,fillOpacity:.22});
+          const marker=L.marker(z.p,{icon:L.divIcon({className:'',html:'<div class="kaef">'+z.v+'</div>',iconSize:[62,30],iconAnchor:[31,15]})})
+            .bindPopup('Оценка спроса: <b>'+z.v+'</b><br>Демонстрационное значение');
+          zoneLayers.push(circle,marker);
+          circle.addTo(map);
+          marker.addTo(map);
         });
+        window.applyMapSettings=(showZones,style)=>{
+          zoneLayers.forEach(layer=>{
+            if(showZones && !map.hasLayer(layer)) layer.addTo(map);
+            if(!showZones && map.hasLayer(layer)) map.removeLayer(layer);
+          });
+          document.getElementById('map').classList.toggle('dark-map',style==='dark');
+        };
         let driverMarker=null;
         window.setDriverLocation=(lat,lon)=>{
           if(driverMarker) map.removeLayer(driverMarker);
